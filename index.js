@@ -2,6 +2,8 @@ import express from "express";
 import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
+import pool from "./db.js";
+
 env.config();
 import env from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +33,26 @@ const io = new Server(expressServer, {
     origin: process.env.FRONTEND_URI, // Allow requests from frontend
     methods: ["GET", "POST"],
   },
+});
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
+  socket.on("privateMessage", async ({ friendId, text }) => {
+    const sender = socket.id; // Replace with actual user authentication
+    const query =
+      "INSERT INTO messages (sender, receiver, text) VALUES ($1, $2, $3)";
+    await pool.query(query, [sender, friendId, text]);
+
+    io.to(friendId).emit("receiveMessage", { sender, text });
+  });
+});
+
+app.get("/api/messages", async (req, res) => {
+  const { friendId } = req.query;
+  const query =
+    "SELECT * FROM messages WHERE receiver = $1 OR sender = $1 ORDER BY created_at";
+  const result = await pool.query(query, [friendId]);
+  res.json(result.rows);
 });
 
 io.on("connection", (socket) => {
@@ -123,6 +145,13 @@ io.on("connection", (socket) => {
       socket.broadcast.to(room).emit("activity", name);
     }
   });
+});
+pool.query("SELECT NOW()", (err, res) => {
+  if (err) {
+    console.error("Database connection failed!", err);
+  } else {
+    console.log("Connected to PostgreSQL:", res.rows);
+  }
 });
 
 function buildMsg(name, text) {
