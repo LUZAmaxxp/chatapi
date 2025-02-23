@@ -116,10 +116,27 @@ app.get("/search", async (req, res) => {
 // Send Friend Request
 app.post("/send-request", async (req, res) => {
   const { senderId, receiverId } = req.body;
-  await User.findByIdAndUpdate(receiverId, {
-    $push: { friendRequests: senderId },
-  });
-  res.json({ message: "Friend request sent" });
+
+  try {
+    const receiver = await User.findById(receiverId);
+    if (!receiver) {
+      return res.status(404).json({ error: "Receiver user not found" });
+    }
+
+    // Check if request already exists
+    if (receiver.friendRequests.includes(senderId)) {
+      return res.status(400).json({ error: "Friend request already sent" });
+    }
+
+    await User.findByIdAndUpdate(receiverId, {
+      $push: { friendRequests: senderId },
+    });
+
+    res.json({ message: "Friend request sent successfully" });
+  } catch (error) {
+    console.error("Error sending friend request:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // Accept Friend Request
@@ -134,12 +151,17 @@ app.post("/accept-request", async (req, res) => {
 });
 
 // Get User Friends List
-app.get("/friends/:userId", async (req, res) => {
-  const user = await User.findById(req.params.userId).populate(
-    "friends",
-    "username profilePic"
-  );
-  res.json(user.friends);
+app.get("/friend-requests/:userId", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).populate(
+      "friendRequests",
+      "username profilePic"
+    );
+    res.json(user.friendRequests);
+  } catch (error) {
+    console.error("Error fetching friend requests:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // Private Chat with WebSockets
