@@ -59,6 +59,12 @@ const Message = mongoose.model("Message", MessageSchema);
 
 // Signup Route
 app.post("/signup", async (req, res) => {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://chat-io-orpin.vercel.app"
+  );
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   try {
     const { username, email, password } = req.body;
     const existingUser = await User.findOne({ email });
@@ -77,6 +83,12 @@ app.post("/signup", async (req, res) => {
 
 // Login Route
 app.post("/login", async (req, res) => {
+  res.setHeader(
+    "Access-Control-Allow-Origin",
+    "https://chat-io-orpin.vercel.app"
+  );
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (!user) return res.status(400).json({ message: "User not found" });
