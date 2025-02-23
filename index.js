@@ -118,7 +118,7 @@ app.get("/search", async (req, res) => {
 });
 
 // Send Friend Request
-app.post("/send-request", authMiddleware, async (req, res) => {
+app.post("/send-request", async (req, res) => {
   const { senderId, receiverId } = req.body;
   try {
     const receiver = await User.findById(receiverId);
@@ -142,7 +142,6 @@ app.post("/send-request", authMiddleware, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
 
 // Accept Friend Request
 app.post("/accept-request", async (req, res) => {
