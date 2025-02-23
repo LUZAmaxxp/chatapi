@@ -129,6 +129,7 @@ app.post("/send-request", async (req, res) => {
 
     // Check if request already exists
     if (receiver.friendRequests.includes(senderId)) {
+      console.log("Friend request already sent to:", receiver.username);
       return res.status(400).json({ error: "Friend request already sent" });
     }
 
