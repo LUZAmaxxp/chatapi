@@ -29,11 +29,7 @@ app.use(
 
 mongoose
   .connect(
-    "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0",
-    {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    }
+    "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
   )
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
@@ -66,18 +62,30 @@ app.post("/signup", async (req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   try {
-    const { username, email, password } = req.body;
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: "User already exists." });
+    console.log("📥 Signup request received:", req.body);
+
+    const { username, password } = req.body;
+    if (!username || !password) {
+      console.log("⚠️ Missing fields:", req.body);
+      return res.status(400).json({ error: "All fields are required" });
     }
+
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      console.log("⚠️ Username already taken:", username);
+      return res.status(400).json({ error: "Username already taken" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ username, email, password: hashedPassword });
-    await user.save();
+    const newUser = new User({ username, password: hashedPassword });
+
+    await newUser.save();
+
+    console.log("✅ User created:", username);
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
-    res.status(500).json({ error: "Server error" });
-    console.error(error);
+    console.error("❌ Signup Error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
