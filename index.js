@@ -21,7 +21,7 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(
   cors({
-    origin: "https://chat-io-orpin.vercel.app", // Allow only your frontend domain
+    origin: process.env.FRONTEND_URI, // Allow only your frontend domain
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true, // Enable cookies if needed
   })
@@ -33,15 +33,19 @@ mongoose
   )
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.log(err));
-
-const UserSchema = new mongoose.Schema({
-  username: String,
-  email: String,
-  password: String,
-  profilePic: String,
-  friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-  friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-});
+const UserSchema = new mongoose.Schema(
+  {
+    username: String,
+    email: String,
+    password: String,
+    profilePic: String,
+    friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  },
+  { timestamps: true }
+);
+UserSchema.index({ email: 1 }, { unique: true });
+UserSchema.index({ username: 1 }, { unique: true });
 
 const MessageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -91,19 +95,19 @@ app.post("/signup", async (req, res) => {
 
 // Login Route
 app.post("/login", async (req, res) => {
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://chat-io-orpin.vercel.app"
-  );
-  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  const { email, password } = req.body;
-  const user = await User.findOne({ email });
-  if (!user) return res.status(400).json({ message: "User not found" });
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
-  res.json({ token, userId: user._id });
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: "User not found" });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid credentials" });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    res.json({ token, userId: user._id });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // Search for Users
@@ -166,7 +170,19 @@ app.get("/friend-requests/:userId", async (req, res) => {
 
 // Private Chat with WebSockets
 io.on("connection", (socket) => {
-  console.log("User connected: " + socket.id);
+  const token = socket.handshake.auth.token;
+  if (!token) {
+    socket.disconnect();
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.userId;
+    console.log("User connected:", decoded.userId);
+  } catch (error) {
+    socket.disconnect();
+    console.error("Invalid token:", error);
+  }
 
   socket.on("privateMessage", async ({ senderId, receiverId, text }) => {
     const message = new Message({
