@@ -118,31 +118,31 @@ app.get("/search", async (req, res) => {
 });
 
 // Send Friend Request
-app.post("/send-request", async (req, res) => {
+app.post("/send-request", authMiddleware, async (req, res) => {
   const { senderId, receiverId } = req.body;
-
   try {
     const receiver = await User.findById(receiverId);
     if (!receiver) {
       return res.status(404).json({ error: "Receiver user not found" });
     }
-
-    // Check if request already exists
-    if (receiver.friendRequests.includes(senderId)) {
-      console.log("Friend request already sent to:", receiver.username);
-      return res.status(400).json({ error: "Friend request already sent" });
+    if (
+      receiver.friendRequests.includes(senderId) ||
+      receiver.friends.includes(senderId)
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Request already sent or already friends" });
     }
-
     await User.findByIdAndUpdate(receiverId, {
       $push: { friendRequests: senderId },
     });
-
     res.json({ message: "Friend request sent successfully" });
   } catch (error) {
     console.error("Error sending friend request:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 // Accept Friend Request
 app.post("/accept-request", async (req, res) => {
