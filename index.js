@@ -158,8 +158,7 @@ app.post("/accept-request", async (req, res) => {
 app.get("/friend-requests/:userId", async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).populate(
-      "friendRequests",
-      "username profilePic"
+      "friendRequests"
     );
     res.json(user.friendRequests);
   } catch (error) {
