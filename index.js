@@ -19,7 +19,13 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
-app.use(cors());
+app.use(
+  cors({
+    origin: "https://chat-io-orpin.vercel.app", // Allow only your frontend domain
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true, // Enable cookies if needed
+  })
+);
 
 mongoose
   .connect(
