@@ -58,6 +58,7 @@ app.post("/signup", async (req, res) => {
   const user = new User({ username, email, password: hashedPassword });
   await user.save();
   res.status(201).json({ message: "User created successfully" });
+  console.log("User created successfully");
 });
 
 // Login Route
