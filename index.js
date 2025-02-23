@@ -17,7 +17,6 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
-console.log(require("crypto").randomBytes(64).toString("hex"));
 
 app.use(express.json());
 app.use(cors());
