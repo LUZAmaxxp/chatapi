@@ -64,8 +64,8 @@ app.post("/signup", async (req, res) => {
   try {
     console.log("📥 Signup request received:", req.body);
 
-    const { username, password } = req.body;
-    if (!username || !password) {
+    const { username, password, email } = req.body;
+    if (!username || !password || !email) {
       console.log("⚠️ Missing fields:", req.body);
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -77,7 +77,7 @@ app.post("/signup", async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ username, password: hashedPassword });
+    const newUser = new User({ username, email, password: hashedPassword });
 
     await newUser.save();
 
