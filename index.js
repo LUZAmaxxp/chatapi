@@ -47,6 +47,9 @@ const io = new Server(server, {
   pingTimeout: 60000,
 });
 
+// Map to store active user connections
+const userSocketMap = new Map();
+
 // MongoDB Connection
 mongoose
   .connect(
@@ -204,6 +207,7 @@ app.get("/api/search", auth, async (req, res) => {
 app.post("/api/send-request", auth, async (req, res) => {
   try {
     const { receiverId } = req.body;
+    const sender = await User.findById(req.user.userId).select("username");
     const receiver = await User.findById(receiverId);
 
     if (!receiver) {
@@ -214,11 +218,23 @@ app.post("/api/send-request", auth, async (req, res) => {
       return res.status(400).json({ error: "Request already sent" });
     }
 
+    // Check if they're already friends
+    if (receiver.friends.includes(req.user.userId)) {
+      return res.status(400).json({ error: "Already friends" });
+    }
+
     receiver.friendRequests.push(req.user.userId);
     await receiver.save();
 
+    // Emit event to receiver if they're online
+    io.to(receiverId).emit("newFriendRequest", {
+      senderId: req.user.userId,
+      senderUsername: sender.username,
+    });
+
     res.json({ message: "Friend request sent" });
   } catch (error) {
+    console.error("Send request error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -227,13 +243,23 @@ app.post("/api/accept-request", auth, async (req, res) => {
   try {
     const { friendId } = req.body;
 
-    const user = await User.findById(req.user.userId);
-    const friend = await User.findById(friendId);
+    const user = await User.findById(req.user.userId).select(
+      "username friendRequests friends"
+    );
+    const friend = await User.findById(friendId).select("username friends");
 
     if (!user || !friend) {
       return res.status(404).json({ error: "User not found" });
     }
 
+    // Check if request exists
+    if (!user.friendRequests.includes(friendId)) {
+      return res
+        .status(400)
+        .json({ error: "No friend request from this user" });
+    }
+
+    // Remove from requests and add to friends
     user.friendRequests = user.friendRequests.filter(
       (id) => id.toString() !== friendId
     );
@@ -242,20 +268,59 @@ app.post("/api/accept-request", auth, async (req, res) => {
 
     await Promise.all([user.save(), friend.save()]);
 
+    // Emit event to the sender of the request
+    io.to(friendId).emit("friendRequestAccepted", {
+      accepterId: req.user.userId,
+      accepterUsername: user.username,
+    });
+
     res.json({ message: "Friend request accepted" });
   } catch (error) {
+    console.error("Accept request error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 app.get("/api/friend-requests/:userId", auth, async (req, res) => {
   try {
+    if (req.params.userId !== req.user.userId) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
     const user = await User.findById(req.params.userId).populate(
       "friendRequests",
       "username email profilePic"
     );
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     res.json(user.friendRequests);
   } catch (error) {
+    console.error("Get friend requests error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/friends/:userId", auth, async (req, res) => {
+  try {
+    if (req.params.userId !== req.user.userId) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+
+    const user = await User.findById(req.params.userId).populate(
+      "friends",
+      "username email profilePic lastActive"
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(user.friends);
+  } catch (error) {
+    console.error("Get friends error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -270,6 +335,7 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
     }).sort({ createdAt: 1 });
     res.json(messages);
   } catch (error) {
+    console.error("Get messages error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -278,53 +344,121 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
+    if (!token) {
+      return next(new Error("Authentication token missing"));
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.userId;
     next();
   } catch (error) {
+    console.error("Socket authentication error:", error);
     next(new Error("Authentication failed"));
   }
 });
 
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.userId);
+  const userId = socket.userId;
+  console.log("User connected:", userId);
 
-  socket.join(socket.userId);
+  // Store the socket id mapped to the user id
+  if (!userSocketMap.has(userId)) {
+    userSocketMap.set(userId, new Set());
+  }
+  userSocketMap.get(userId).add(socket.id);
+
+  // Join a room with the user's ID
+  socket.join(userId);
+
+  // Update user's last active status
+  User.findByIdAndUpdate(userId, { lastActive: new Date() }).catch((err) => {
+    console.error("Error updating last active status:", err);
+  });
 
   socket.on("friendRequest", async ({ receiverId }) => {
-    io.to(receiverId).emit("newFriendRequest", {
-      senderId: socket.userId,
-    });
+    try {
+      const sender = await User.findById(userId).select("username");
+
+      if (!sender) {
+        console.error("Sender not found:", userId);
+        return;
+      }
+
+      console.log(`Emitting friendRequest from ${userId} to ${receiverId}`);
+      io.to(receiverId).emit("newFriendRequest", {
+        senderId: userId,
+        senderUsername: sender.username,
+      });
+    } catch (error) {
+      console.error("Error in friendRequest event:", error);
+    }
   });
 
   socket.on("friendRequestAccepted", async ({ senderId }) => {
-    io.to(senderId).emit("friendRequestAccepted", {
-      accepterId: socket.userId,
-    });
+    try {
+      const accepter = await User.findById(userId).select("username");
+
+      if (!accepter) {
+        console.error("Accepter not found:", userId);
+        return;
+      }
+
+      console.log(
+        `Emitting friendRequestAccepted from ${userId} to ${senderId}`
+      );
+      io.to(senderId).emit("friendRequestAccepted", {
+        accepterId: userId,
+        accepterUsername: accepter.username,
+      });
+    } catch (error) {
+      console.error("Error in friendRequestAccepted event:", error);
+    }
   });
 
   socket.on("privateMessage", async (data) => {
     try {
       const message = new Message({
-        sender: socket.userId,
+        sender: userId,
         receiver: data.receiver,
         text: data.text,
       });
       await message.save();
 
-      io.to(data.receiver).to(socket.userId).emit("newMessage", {
+      const messageData = {
         messageId: message._id,
-        sender: socket.userId,
+        sender: userId,
+        receiver: data.receiver,
         text: message.text,
         createdAt: message.createdAt,
-      });
+      };
+
+      console.log(`Sending message from ${userId} to ${data.receiver}`);
+      // Send to both sender and receiver rooms
+      io.to(data.receiver).to(userId).emit("newMessage", messageData);
     } catch (error) {
+      console.error("Message error:", error);
       socket.emit("messageError", { error: "Failed to send message" });
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.userId);
+    console.log("User disconnected:", userId);
+
+    // Remove this socket from the user's set of active connections
+    if (userSocketMap.has(userId)) {
+      const userSockets = userSocketMap.get(userId);
+      userSockets.delete(socket.id);
+
+      // If no more active connections for this user, remove from map
+      if (userSockets.size === 0) {
+        userSocketMap.delete(userId);
+      }
+    }
+
+    // Update last active status on disconnect
+    User.findByIdAndUpdate(userId, { lastActive: new Date() }).catch((err) => {
+      console.error("Error updating last active status on disconnect:", err);
+    });
   });
 });
 
