@@ -12,7 +12,7 @@ import mongoSanitize from "express-mongo-sanitize";
 
 dotenv.config();
 
-// Required environment variables validation
+// Validate environment variables
 if (
   !process.env.JWT_SECRET ||
   !process.env.MONGODB_URI ||
@@ -36,7 +36,7 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-// CORS configuration
+// CORS setup
 const corsOptions = {
   origin: process.env.FRONTEND_URI,
   methods: ["GET", "POST", "PUT", "DELETE"],
@@ -51,7 +51,7 @@ const io = new Server(server, {
   pingTimeout: 60000,
 });
 
-// MongoDB connection
+// MongoDB Connection
 mongoose
   .connect(
     "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
@@ -80,7 +80,6 @@ const UserSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minlength: 8,
     },
     profilePic: {
       type: String,
@@ -106,47 +105,40 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const MessageSchema = new mongoose.Schema({
-  sender: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
+const MessageSchema = new mongoose.Schema(
+  {
+    sender: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    receiver: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    text: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 2000,
+    },
   },
-  receiver: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
-  text: {
-    type: String,
-    required: true,
-    trim: true,
-    maxlength: 2000,
-  },
-  timestamp: {
-    type: Date,
-    default: Date.now,
-  },
-});
+  { timestamps: true }
+);
 
 const User = mongoose.model("User", UserSchema);
 const Message = mongoose.model("Message", MessageSchema);
 
-// Authentication middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
-
-  if (!token) {
-    return res.status(401).json({ error: "Access denied" });
-  }
-
+// Auth Middleware
+const auth = async (req, res, next) => {
   try {
+    const token = req.header("Authorization").replace("Bearer ", "");
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    res.status(403).json({ error: "Invalid token" });
+    res.status(401).json({ error: "Authentication required" });
   }
 };
 
@@ -155,12 +147,8 @@ app.post("/api/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
 
-    if (!username || !password || !email) {
-      return res.status(400).json({ error: "All fields are required" });
-    }
-
     const existingUser = await User.findOne({
-      $or: [{ username }, { email: email.toLowerCase() }],
+      $or: [{ email }, { username }],
     });
 
     if (existingUser) {
@@ -170,23 +158,15 @@ app.post("/api/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     const user = new User({
       username,
-      email: email.toLowerCase(),
+      email,
       password: hashedPassword,
     });
 
     await user.save();
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "24h",
-    });
-
-    res.status(201).json({
-      token,
-      userId: user._id,
-      username: user.username,
-    });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    res.status(201).json({ token, userId: user._id });
   } catch (error) {
-    console.error("❌ Signup Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -194,69 +174,52 @@ app.post("/api/signup", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "24h",
-    });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
 
-    res.json({
-      token,
-      userId: user._id,
-      username: user.username,
-    });
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
+    res.json({ token, userId: user._id });
   } catch (error) {
-    console.error("❌ Login Error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-app.get("/api/search", authenticateToken, async (req, res) => {
+app.get("/api/search", auth, async (req, res) => {
   try {
     const { username } = req.query;
-    if (!username) {
-      return res.status(400).json({ error: "Username required" });
-    }
-
     const users = await User.find({
       username: new RegExp(username, "i"),
       _id: { $ne: req.user.userId },
-    })
-      .select("-password -friendRequests")
-      .limit(10);
-
+    }).select("-password");
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: "Server error" });
   }
 });
 
-app.post("/api/send-request", authenticateToken, async (req, res) => {
+app.post("/api/send-request", auth, async (req, res) => {
   try {
     const { receiverId } = req.body;
-    const senderId = req.user.userId;
-
     const receiver = await User.findById(receiverId);
+
     if (!receiver) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    if (
-      receiver.friendRequests.includes(senderId) ||
-      receiver.friends.includes(senderId)
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Request already sent or already friends" });
+    if (receiver.friendRequests.includes(req.user.userId)) {
+      return res.status(400).json({ error: "Request already sent" });
     }
 
-    await User.findByIdAndUpdate(receiverId, {
-      $addToSet: { friendRequests: senderId },
-    });
+    receiver.friendRequests.push(req.user.userId);
+    await receiver.save();
 
     res.json({ message: "Friend request sent" });
   } catch (error) {
@@ -264,35 +227,24 @@ app.post("/api/send-request", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/api/friend-requests/:userId", authenticateToken, async (req, res) => {
+app.post("/api/accept-request", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.params.userId).populate(
-      "friendRequests",
-      "username profilePic"
-    );
+    const { friendId } = req.body;
 
-    if (!user) {
+    const user = await User.findById(req.user.userId);
+    const friend = await User.findById(friendId);
+
+    if (!user || !friend) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(user.friendRequests);
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
+    user.friendRequests = user.friendRequests.filter(
+      (id) => id.toString() !== friendId
+    );
+    user.friends.push(friendId);
+    friend.friends.push(req.user.userId);
 
-app.post("/api/accept-request", authenticateToken, async (req, res) => {
-  try {
-    const { userId, friendId } = req.body;
-
-    await User.findByIdAndUpdate(userId, {
-      $pull: { friendRequests: friendId },
-      $addToSet: { friends: friendId },
-    });
-
-    await User.findByIdAndUpdate(friendId, {
-      $addToSet: { friends: userId },
-    });
+    await Promise.all([user.save(), friend.save()]);
 
     res.json({ message: "Friend request accepted" });
   } catch (error) {
@@ -300,25 +252,47 @@ app.post("/api/accept-request", authenticateToken, async (req, res) => {
   }
 });
 
-// Socket.IO authentication middleware
+app.get("/api/friend-requests/:userId", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).populate(
+      "friendRequests",
+      "username email profilePic"
+    );
+    res.json(user.friendRequests);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.get("/api/messages/:friendId", auth, async (req, res) => {
+  try {
+    const messages = await Message.find({
+      $or: [
+        { sender: req.user.userId, receiver: req.params.friendId },
+        { sender: req.params.friendId, receiver: req.user.userId },
+      ],
+    }).sort({ createdAt: 1 });
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Socket.IO handling
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error("Authentication error"));
-    }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     socket.userId = decoded.userId;
     next();
   } catch (error) {
-    next(new Error("Authentication error"));
+    next(new Error("Authentication failed"));
   }
 });
 
-// Socket.IO connection handling
 io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.userId);
+  console.log("User connected:", socket.userId);
+
   socket.join(socket.userId);
 
   socket.on("friendRequest", async ({ receiverId }) => {
@@ -346,7 +320,7 @@ io.on("connection", (socket) => {
         messageId: message._id,
         sender: socket.userId,
         text: message.text,
-        timestamp: message.timestamp,
+        createdAt: message.createdAt,
       });
     } catch (error) {
       socket.emit("messageError", { error: "Failed to send message" });
@@ -354,9 +328,9 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.userId);
+    console.log("User disconnected:", socket.userId);
   });
 });
 
 const PORT = process.env.PORT || 3500;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
