@@ -13,11 +13,7 @@ import mongoSanitize from "express-mongo-sanitize";
 dotenv.config();
 
 // Validate environment variables
-if (
-  !process.env.JWT_SECRET ||
-  !process.env.MONGODB_URI ||
-  !process.env.FRONTEND_URI
-) {
+if (!process.env.JWT_SECRET || !process.env.FRONTEND_URI) {
   throw new Error("Missing required environment variables");
 }
 
