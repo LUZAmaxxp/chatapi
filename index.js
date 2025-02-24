@@ -29,7 +29,9 @@ app.use(
 
 // ✅ Connect to MongoDB
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(
+    "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
+  )
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
