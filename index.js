@@ -12,7 +12,6 @@ import mongoSanitize from "express-mongo-sanitize";
 
 dotenv.config();
 
-// Validate environment variables
 if (!process.env.JWT_SECRET || !process.env.FRONTEND_URI) {
   throw new Error("Missing required environment variables");
 }
@@ -20,19 +19,16 @@ if (!process.env.JWT_SECRET || !process.env.FRONTEND_URI) {
 const app = express();
 const server = http.createServer(app);
 
-// Security middleware
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(express.json({ limit: "10kb" }));
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
 app.use("/api/", limiter);
 
-// CORS setup
 const corsOptions = {
   origin: process.env.FRONTEND_URI,
   methods: ["GET", "POST", "PUT", "DELETE"],
@@ -41,16 +37,13 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// Socket.IO setup
 const io = new Server(server, {
   cors: corsOptions,
   pingTimeout: 60000,
 });
 
-// Map to store active user connections
 const userSocketMap = new Map();
 
-// MongoDB Connection
 mongoose
   .connect(
     "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
@@ -58,7 +51,6 @@ mongoose
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
-// Schemas
 const UserSchema = new mongoose.Schema(
   {
     username: {
