@@ -129,7 +129,6 @@ const MessageSchema = new mongoose.Schema(
 const User = mongoose.model("User", UserSchema);
 const Message = mongoose.model("Message", MessageSchema);
 
-// Auth Middleware
 const auth = async (req, res, next) => {
   try {
     const token = req.header("Authorization").replace("Bearer ", "");
@@ -141,7 +140,6 @@ const auth = async (req, res, next) => {
   }
 };
 
-// Routes
 app.post("/api/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -218,7 +216,6 @@ app.post("/api/send-request", auth, async (req, res) => {
       return res.status(400).json({ error: "Request already sent" });
     }
 
-    // Check if they're already friends
     if (receiver.friends.includes(req.user.userId)) {
       return res.status(400).json({ error: "Already friends" });
     }
@@ -226,8 +223,6 @@ app.post("/api/send-request", auth, async (req, res) => {
     receiver.friendRequests.push(req.user.userId);
     await receiver.save();
 
-    // Emit event to receiver if they're online
-    // Send both event names for backward compatibility
     const socketData = {
       senderId: req.user.userId,
       senderUsername: sender.username,
@@ -258,14 +253,12 @@ app.post("/api/accept-request", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Check if request exists
     if (!user.friendRequests.includes(friendId)) {
       return res
         .status(400)
         .json({ error: "No friend request from this user" });
     }
 
-    // Remove from requests and add to friends
     user.friendRequests = user.friendRequests.filter(
       (id) => id.toString() !== friendId
     );
@@ -274,7 +267,6 @@ app.post("/api/accept-request", auth, async (req, res) => {
 
     await Promise.all([user.save(), friend.save()]);
 
-    // Emit event to the sender of the request
     const socketData = {
       accepterId: req.user.userId,
       accepterUsername: user.username,
@@ -343,7 +335,6 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
       ],
     }).sort({ createdAt: 1 });
 
-    // Transform messages to include isSentByMe flag for the frontend
     const transformedMessages = messages.map((message) => {
       const messageObj = message.toObject();
       messageObj.isSentByMe = message.sender.toString() === req.user.userId;
@@ -357,7 +348,6 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
   }
 });
 
-// Socket.IO handling
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
@@ -378,24 +368,19 @@ io.on("connection", (socket) => {
   const userId = socket.userId;
   console.log("User connected:", userId);
 
-  // Store the socket id mapped to the user id
   if (!userSocketMap.has(userId)) {
     userSocketMap.set(userId, new Set());
   }
   userSocketMap.get(userId).add(socket.id);
 
-  // Join a room with the user's ID
   socket.join(userId);
 
-  // Update user's last active status
   User.findByIdAndUpdate(userId, { lastActive: new Date() })
     .then(() => {
-      // Notify friends that user is online
       User.findById(userId)
         .select("friends")
         .then((user) => {
           if (user && user.friends.length > 0) {
-            // Broadcast online status to all friends
             user.friends.forEach((friendId) => {
               io.to(friendId.toString()).emit("userOnline", { userId });
             });
@@ -406,7 +391,6 @@ io.on("connection", (socket) => {
       console.error("Error updating last active status:", err);
     });
 
-  // Handle user registration (added for the new frontend)
   socket.on("register", (data) => {
     if (data.userId) {
       console.log(`Registering socket ${socket.id} for user ${data.userId}`);
@@ -477,32 +461,28 @@ io.on("connection", (socket) => {
       });
       await message.save();
 
-      // Message as seen by the sender (sent by me)
       const senderMessageData = {
         _id: message._id,
         sender: userId,
         receiver: data.receiver,
         text: message.text,
         createdAt: message.createdAt,
-        isSentByMe: true, // Flag to indicate this is sent by the current user
+        isSentByMe: true,
       };
 
-      // Message as seen by the receiver (received from someone else)
       const receiverMessageData = {
         _id: message._id,
         sender: userId,
         receiver: data.receiver,
         text: message.text,
         createdAt: message.createdAt,
-        isSentByMe: false, // Flag to indicate this was not sent by the receiver
+        isSentByMe: false,
       };
 
       console.log(`Sending message from ${userId} to ${data.receiver}`);
 
-      // Send to sender with sender perspective
       io.to(userId).emit("newMessage", senderMessageData);
 
-      // Send to receiver with receiver perspective
       io.to(data.receiver).emit("newMessage", receiverMessageData);
     } catch (error) {
       console.error("Message error:", error);
@@ -510,12 +490,10 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Added event for typing indicator
   socket.on("typing", (data) => {
     io.to(data.receiver).emit("userTyping", { userId });
   });
 
-  // Added event for stopping typing
   socket.on("stopTyping", (data) => {
     io.to(data.receiver).emit("userStoppedTyping", { userId });
   });
@@ -523,21 +501,17 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     console.log("User disconnected:", userId);
 
-    // Remove this socket from the user's set of active connections
     if (userSocketMap.has(userId)) {
       const userSockets = userSocketMap.get(userId);
       userSockets.delete(socket.id);
 
-      // If no more active connections for this user, remove from map and notify friends
       if (userSockets.size === 0) {
         userSocketMap.delete(userId);
 
-        // Get user's friends and notify them about offline status
         User.findById(userId)
           .select("friends")
           .then((user) => {
             if (user && user.friends.length > 0) {
-              // Broadcast offline status to all friends
               user.friends.forEach((friendId) => {
                 io.to(friendId.toString()).emit("userOffline", { userId });
               });
@@ -546,7 +520,6 @@ io.on("connection", (socket) => {
       }
     }
 
-    // Update last active status on disconnect
     User.findByIdAndUpdate(userId, { lastActive: new Date() }).catch((err) => {
       console.error("Error updating last active status on disconnect:", err);
     });
