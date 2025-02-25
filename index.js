@@ -227,24 +227,16 @@ app.post("/api/send-request", auth, async (req, res) => {
     await receiver.save();
 
     // Emit event to receiver if they're online
-    // Emit both event names for compatibility during transition
-    if (userSocketMap.has(receiverId)) {
-      io.to(receiverId).emit("newFriendRequest", {
-        senderId: req.user.userId,
-        senderUsername: sender.username,
-      });
+    // Send both event names for backward compatibility
+    const socketData = {
+      senderId: req.user.userId,
+      senderUsername: sender.username,
+    };
 
-      io.to(receiverId).emit("friendRequest", {
-        senderId: req.user.userId,
-        senderUsername: sender.username,
-      });
+    io.to(receiverId).emit("friendRequest", socketData);
+    io.to(receiverId).emit("newFriendRequest", socketData);
 
-      console.log(
-        `Friend request emitted to ${receiverId} from ${req.user.userId}`
-      );
-    } else {
-      console.log(`Receiver ${receiverId} is not currently online`);
-    }
+    console.log(`Friend request sent to ${receiverId} from ${req.user.userId}`);
 
     res.json({ message: "Friend request sent" });
   } catch (error) {
@@ -283,19 +275,13 @@ app.post("/api/accept-request", auth, async (req, res) => {
     await Promise.all([user.save(), friend.save()]);
 
     // Emit event to the sender of the request
-    if (userSocketMap.has(friendId)) {
-      io.to(friendId).emit("friendRequestAccepted", {
-        accepterId: req.user.userId,
-        accepterUsername: user.username,
-      });
-      console.log(
-        `Friend request acceptance emitted to ${friendId} from ${req.user.userId}`
-      );
-    } else {
-      console.log(
-        `Friend ${friendId} is not currently online to receive acceptance`
-      );
-    }
+    const socketData = {
+      accepterId: req.user.userId,
+      accepterUsername: user.username,
+    };
+
+    io.to(friendId).emit("friendRequestAccepted", socketData);
+    console.log(`Friend request accepted notification sent to ${friendId}`);
 
     res.json({ message: "Friend request accepted" });
   } catch (error) {
@@ -398,53 +384,36 @@ io.on("connection", (socket) => {
     console.error("Error updating last active status:", err);
   });
 
-  // Handle the register event from the frontend
-  socket.on("register", ({ userId }) => {
-    if (userId && userId === socket.userId) {
-      console.log(`User ${userId} registered their socket connection`);
-
-      // Make sure they're in their own room
-      socket.join(userId);
-
-      // Update the socket map
-      if (!userSocketMap.has(userId)) {
-        userSocketMap.set(userId, new Set());
-      }
-      userSocketMap.get(userId).add(socket.id);
+  // Handle user registration (added for the new frontend)
+  socket.on("register", (data) => {
+    if (data.userId) {
+      console.log(`Registering socket ${socket.id} for user ${data.userId}`);
+      socket.join(data.userId);
     }
   });
 
   socket.on("friendRequest", async (data) => {
     try {
       const { receiverId, senderId } = data;
-
-      // Verify sender ID matches socket user ID
-      if (senderId && senderId !== userId) {
-        console.error(
-          `User ID mismatch in friendRequest: ${senderId} vs ${userId}`
-        );
-        return;
-      }
-
-      const sender = await User.findById(userId).select("username");
+      const sender = await User.findById(senderId || userId).select("username");
 
       if (!sender) {
-        console.error("Sender not found:", userId);
+        console.error("Sender not found:", senderId || userId);
         return;
       }
 
-      console.log(`Emitting friendRequest from ${userId} to ${receiverId}`);
+      console.log(
+        `Emitting friendRequest from ${senderId || userId} to ${receiverId}`
+      );
 
-      // Emit both event names for compatibility
-      io.to(receiverId).emit("newFriendRequest", {
-        senderId: userId,
+      // Send both event types for compatibility
+      const eventData = {
+        senderId: senderId || userId,
         senderUsername: sender.username,
-      });
+      };
 
-      io.to(receiverId).emit("friendRequest", {
-        senderId: userId,
-        senderUsername: sender.username,
-      });
+      io.to(receiverId).emit("friendRequest", eventData);
+      io.to(receiverId).emit("newFriendRequest", eventData);
     } catch (error) {
       console.error("Error in friendRequest event:", error);
     }
@@ -453,27 +422,23 @@ io.on("connection", (socket) => {
   socket.on("friendRequestAccepted", async (data) => {
     try {
       const { senderId, receiverId } = data;
-
-      // Verify receiver ID matches socket user ID
-      if (receiverId && receiverId !== userId) {
-        console.error(
-          `User ID mismatch in friendRequestAccepted: ${receiverId} vs ${userId}`
-        );
-        return;
-      }
-
-      const accepter = await User.findById(userId).select("username");
+      const accepter = await User.findById(receiverId || userId).select(
+        "username"
+      );
 
       if (!accepter) {
-        console.error("Accepter not found:", userId);
+        console.error("Accepter not found:", receiverId || userId);
         return;
       }
 
       console.log(
-        `Emitting friendRequestAccepted from ${userId} to ${senderId}`
+        `Emitting friendRequestAccepted from ${
+          receiverId || userId
+        } to ${senderId}`
       );
+
       io.to(senderId).emit("friendRequestAccepted", {
-        accepterId: userId,
+        accepterId: receiverId || userId,
         accepterUsername: accepter.username,
       });
     } catch (error) {
