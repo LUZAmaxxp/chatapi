@@ -9,6 +9,9 @@ import http from "http";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 dotenv.config();
 
@@ -26,6 +29,40 @@ app.use(express.json({ limit: "10kb" }));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
+});
+const uploadDir = path.join(__dirname, "uploads");
+// Ensure upload directory exists
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Configure storage
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + "-" + uniqueSuffix + ext);
+  },
+});
+
+// File filter
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Not an image! Please upload only images."), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max size
+  },
 });
 app.use("/api/", limiter);
 
@@ -339,7 +376,133 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Get user profile
+app.get("/api/user-profile", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select(
+      "-password -friendRequests"
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Format profile pic URL
+    const profilePicUrl = user.profilePic.startsWith("http")
+      ? user.profilePic
+      : `${req.protocol}://${req.get("host")}/uploads/${user.profilePic}`;
+
+    const userProfile = {
+      ...user.toObject(),
+      profilePicUrl,
+    };
+
+    res.json(userProfile);
+  } catch (error) {
+    console.error("Get profile error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Update user profile
+app.put("/api/update-profile", auth, async (req, res) => {
+  try {
+    const { username, email } = req.body;
+
+    // Check if username or email is already taken by another user
+    if (username || email) {
+      const existingUser = await User.findOne({
+        $or: [
+          { username, _id: { $ne: req.user.userId } },
+          { email, _id: { $ne: req.user.userId } },
+        ],
+      });
+
+      if (existingUser) {
+        return res
+          .status(400)
+          .json({ error: "Username or email already taken" });
+      }
+    }
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.userId,
+      { $set: req.body },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Format profile pic URL
+    const profilePicUrl = updatedUser.profilePic.startsWith("http")
+      ? updatedUser.profilePic
+      : `${req.protocol}://${req.get("host")}/uploads/${
+          updatedUser.profilePic
+        }`;
+
+    const userProfile = {
+      ...updatedUser.toObject(),
+      profilePicUrl,
+    };
+
+    res.json(userProfile);
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Upload profile picture
+app.post(
+  "/api/upload-profile-image",
+  auth,
+  upload.single("profileImage"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const user = await User.findById(req.user.userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Delete old profile pic if it's not the default and exists in our uploads
+      if (
+        user.profilePic !== "default.png" &&
+        !user.profilePic.startsWith("http")
+      ) {
+        const oldPicPath = path.join(uploadDir, user.profilePic);
+        if (fs.existsSync(oldPicPath)) {
+          fs.unlinkSync(oldPicPath);
+        }
+      }
+
+      // Save the new profile pic filename to the user document
+      user.profilePic = req.file.filename;
+      await user.save();
+
+      const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+        req.file.filename
+      }`;
+
+      res.json({
+        message: "Profile image uploaded successfully",
+        imageUrl,
+      });
+    } catch (error) {
+      console.error("Upload profile image error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
