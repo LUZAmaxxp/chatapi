@@ -84,7 +84,7 @@ const userSocketMap = new Map();
 mongoose
   .connect(
     "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
-  )
+  ) // Use an environment variable for the MongoDB URI
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
@@ -116,13 +116,13 @@ const UserSchema = new mongoose.Schema(
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "User ",
       },
     ],
     friendRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "User ",
       },
     ],
     lastActive: {
@@ -137,12 +137,12 @@ const MessageSchema = new mongoose.Schema(
   {
     sender: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "User ",
       required: true,
     },
     receiver: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "User ",
       required: true,
     },
     text: {
@@ -155,7 +155,7 @@ const MessageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const User = mongoose.model("User", UserSchema);
+const User = mongoose.model("User ", UserSchema);
 const Message = mongoose.model("Message", MessageSchema);
 
 const auth = async (req, res, next) => {
@@ -169,6 +169,7 @@ const auth = async (req, res, next) => {
   }
 };
 
+// Sign up
 app.post("/api/signup", async (req, res) => {
   try {
     const { username, email, password } = req.body;
@@ -193,10 +194,12 @@ app.post("/api/signup", async (req, res) => {
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
     res.status(201).json({ token, userId: user._id });
   } catch (error) {
+    console.error("Signup error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
 
+// Log in
 app.post("/api/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -214,169 +217,10 @@ app.post("/api/login", async (req, res) => {
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET);
     res.json({ token, userId: user._id });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
-
-app.get("/api/search", auth, async (req, res) => {
-  try {
-    const { username } = req.query;
-    const users = await User.find({
-      username: new RegExp(username, "i"),
-      _id: { $ne: req.user.userId },
-    }).select("-password");
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.post("/api/send-request", auth, async (req, res) => {
-  try {
-    const { receiverId } = req.body;
-    const sender = await User.findById(req.user.userId).select("username");
-    const receiver = await User.findById(receiverId);
-
-    if (!receiver) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (receiver.friendRequests.includes(req.user.userId)) {
-      return res.status(400).json({ error: "Request already sent" });
-    }
-
-    if (receiver.friends.includes(req.user.userId)) {
-      return res.status(400).json({ error: "Already friends" });
-    }
-
-    receiver.friendRequests.push(req.user.userId);
-    await receiver.save();
-
-    const socketData = {
-      senderId: req.user.userId,
-      senderUsername: sender.username,
-    };
-
-    io.to(receiverId).emit("friendRequest", socketData);
-    io.to(receiverId).emit("newFriendRequest", socketData);
-
-    console.log(`Friend request sent to ${receiverId} from ${req.user.userId}`);
-
-    res.json({ message: "Friend request sent" });
-  } catch (error) {
-    console.error("Send request error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.post("/api/accept-request", auth, async (req, res) => {
-  try {
-    const { friendId } = req.body;
-
-    const user = await User.findById(req.user.userId).select(
-      "username friendRequests friends"
-    );
-    const friend = await User.findById(friendId).select("username friends");
-
-    if (!user || !friend) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    if (!user.friendRequests.includes(friendId)) {
-      return res
-        .status(400)
-        .json({ error: "No friend request from this user" });
-    }
-
-    user.friendRequests = user.friendRequests.filter(
-      (id) => id.toString() !== friendId
-    );
-    user.friends.push(friendId);
-    friend.friends.push(req.user.userId);
-
-    await Promise.all([user.save(), friend.save()]);
-
-    const socketData = {
-      accepterId: req.user.userId,
-      accepterUsername: user.username,
-    };
-
-    io.to(friendId).emit("friendRequestAccepted", socketData);
-    console.log(`Friend request accepted notification sent to ${friendId}`);
-
-    res.json({ message: "Friend request accepted" });
-  } catch (error) {
-    console.error("Accept request error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.get("/api/friend-requests/:userId", auth, async (req, res) => {
-  try {
-    if (req.params.userId !== req.user.userId) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    const user = await User.findById(req.params.userId).populate(
-      "friendRequests",
-      "username email profilePic"
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.json(user.friendRequests);
-  } catch (error) {
-    console.error("Get friend requests error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.get("/api/friends/:userId", auth, async (req, res) => {
-  try {
-    if (req.params.userId !== req.user.userId) {
-      return res.status(403).json({ error: "Unauthorized" });
-    }
-
-    const user = await User.findById(req.params.userId).populate(
-      "friends",
-      "username email profilePic lastActive"
-    );
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.json(user.friends);
-  } catch (error) {
-    console.error("Get friends error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.get("/api/messages/:friendId", auth, async (req, res) => {
-  try {
-    const messages = await Message.find({
-      $or: [
-        { sender: req.user.userId, receiver: req.params.friendId },
-        { sender: req.params.friendId, receiver: req.user.userId },
-      ],
-    }).sort({ createdAt: 1 });
-
-    const transformedMessages = messages.map((message) => {
-      const messageObj = message.toObject();
-      messageObj.isSentByMe = message.sender.toString() === req.user.userId;
-      return messageObj;
-    });
-
-    res.json(transformedMessages);
-  } catch (error) {
-    console.error("Get messages error:", error);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Get user profile
 app.get("/api/user-profile", auth, async (req, res) => {
@@ -386,7 +230,7 @@ app.get("/api/user-profile", auth, async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ error: "User not found" });
+      return res.status(404).json({ error: "User  not found" });
     }
 
     // Format profile pic URL
@@ -435,7 +279,7 @@ app.put("/api/update-profile", auth, async (req, res) => {
     ).select("-password");
 
     if (!updatedUser) {
-      return res.status(404).json({ error: "User not found" });
+      return res.status(404).json({ error: "User  not found" });
     }
 
     // Format profile pic URL
@@ -471,7 +315,7 @@ app.post(
       const user = await User.findById(req.user.userId);
 
       if (!user) {
-        return res.status(404).json({ error: "User not found" });
+        return res.status(404).json({ error: "User  not found" });
       }
 
       // Delete old profile pic if it's not the default and exists in our uploads
@@ -503,6 +347,8 @@ app.post(
     }
   }
 );
+
+// Socket.io setup
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
@@ -521,7 +367,7 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   const userId = socket.userId;
-  console.log("User connected:", userId);
+  console.log("User  connected:", userId);
 
   if (!userSocketMap.has(userId)) {
     userSocketMap.set(userId, new Set());
@@ -654,7 +500,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User disconnected:", userId);
+    console.log("User  disconnected:", userId);
 
     if (userSocketMap.has(userId)) {
       const userSockets = userSocketMap.get(userId);
