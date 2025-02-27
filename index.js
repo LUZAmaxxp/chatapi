@@ -460,6 +460,7 @@ app.put("/api/update-profile", auth, async (req, res) => {
 });
 
 // Upload profile picture
+// Upload profile picture
 app.post(
   "/api/upload-profile-image",
   auth,
@@ -477,13 +478,10 @@ app.post(
       }
 
       // Delete old profile pic if it's not the default and exists in our uploads
-      if (
-        user.profilePic == "default.png" &&
-        user.profilePic.startsWith("http")
-      ) {
+      if (user.profilePic && user.profilePic !== "default.png") {
         const oldPicPath = path.join(uploadDir, user.profilePic);
         if (fs.existsSync(oldPicPath)) {
-          fs.unlinkSync(oldPicPath);
+          fs.unlinkSync(oldPicPath); // Delete old profile picture
         }
       }
 
@@ -505,6 +503,7 @@ app.post(
     }
   }
 );
+
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth.token;
