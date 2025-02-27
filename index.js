@@ -12,6 +12,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -22,6 +23,10 @@ if (!process.env.JWT_SECRET || !process.env.FRONTEND_URI) {
 const app = express();
 const server = http.createServer(app);
 
+// Get __dirname equivalent in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(express.json({ limit: "10kb" }));
@@ -30,11 +35,15 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
+
 const uploadDir = path.join(__dirname, "uploads");
 // Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+// Serve static files from uploads directory
+app.use("/uploads", express.static(uploadDir));
 
 // Configure storage
 const storage = multer.diskStorage({
@@ -64,6 +73,7 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB max size
   },
 });
+
 app.use("/api/", limiter);
 
 const corsOptions = {
@@ -84,7 +94,7 @@ const userSocketMap = new Map();
 mongoose
   .connect(
     "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
-  ) // Use an environment variable for the MongoDB URI
+  )
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
 
@@ -116,13 +126,13 @@ const UserSchema = new mongoose.Schema(
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User ",
+        ref: "User",
       },
     ],
     friendRequests: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User ",
+        ref: "User",
       },
     ],
     lastActive: {
@@ -137,12 +147,12 @@ const MessageSchema = new mongoose.Schema(
   {
     sender: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User ",
+      ref: "User",
       required: true,
     },
     receiver: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User ",
+      ref: "User",
       required: true,
     },
     text: {
@@ -155,7 +165,8 @@ const MessageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const User = mongoose.model("User ", UserSchema);
+// Fix model name - remove trailing space
+const User = mongoose.model("User", UserSchema);
 const Message = mongoose.model("Message", MessageSchema);
 
 const auth = async (req, res, next) => {
@@ -225,12 +236,10 @@ app.post("/api/login", async (req, res) => {
 // Get user profile
 app.get("/api/user-profile", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select(
-      "-password -friendRequests"
-    );
+    const user = await User.findById(req.user.userId).select("-password");
 
     if (!user) {
-      return res.status(404).json({ error: "User  not found" });
+      return res.status(404).json({ error: "User not found" });
     }
 
     // Format profile pic URL
@@ -246,6 +255,24 @@ app.get("/api/user-profile", auth, async (req, res) => {
     res.json(userProfile);
   } catch (error) {
     console.error("Get profile error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Get friend requests
+app.get("/api/friend-requests", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId)
+      .select("friendRequests")
+      .populate("friendRequests", "username");
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(user.friendRequests || []);
+  } catch (error) {
+    console.error("Get friend requests error:", error);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -279,7 +306,7 @@ app.put("/api/update-profile", auth, async (req, res) => {
     ).select("-password");
 
     if (!updatedUser) {
-      return res.status(404).json({ error: "User  not found" });
+      return res.status(404).json({ error: "User not found" });
     }
 
     // Format profile pic URL
@@ -315,7 +342,7 @@ app.post(
       const user = await User.findById(req.user.userId);
 
       if (!user) {
-        return res.status(404).json({ error: "User  not found" });
+        return res.status(404).json({ error: "User not found" });
       }
 
       // Delete old profile pic if it's not the default and exists in our uploads
@@ -367,7 +394,7 @@ io.use((socket, next) => {
 
 io.on("connection", (socket) => {
   const userId = socket.userId;
-  console.log("User  connected:", userId);
+  console.log("User connected:", userId);
 
   if (!userSocketMap.has(userId)) {
     userSocketMap.set(userId, new Set());
@@ -500,7 +527,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("User  disconnected:", userId);
+    console.log("User disconnected:", userId);
 
     if (userSocketMap.has(userId)) {
       const userSockets = userSocketMap.get(userId);
