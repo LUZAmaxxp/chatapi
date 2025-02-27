@@ -12,6 +12,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -30,6 +31,8 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, "uploads");
 // Ensure upload directory exists
 if (!fs.existsSync(uploadDir)) {
