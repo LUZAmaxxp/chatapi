@@ -226,7 +226,7 @@ app.post("/api/login", async (req, res) => {
 app.get("/api/user-profile", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select(
-      "-password -friendRequests"
+      "-username -profilePic "
     );
 
     if (!user) {
