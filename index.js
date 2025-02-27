@@ -441,7 +441,6 @@ app.put("/api/update-profile", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Format profile pic URL
     const profilePicUrl = updatedUser.profilePic.startsWith("http")
       ? updatedUser.profilePic
       : `${req.protocol}://${req.get("host")}/uploads/${
@@ -479,8 +478,8 @@ app.post(
 
       // Delete old profile pic if it's not the default and exists in our uploads
       if (
-        user.profilePic !== "default.png" &&
-        !user.profilePic.startsWith("http")
+        user.profilePic == "default.png" &&
+        user.profilePic.startsWith("http")
       ) {
         const oldPicPath = path.join(uploadDir, user.profilePic);
         if (fs.existsSync(oldPicPath)) {
