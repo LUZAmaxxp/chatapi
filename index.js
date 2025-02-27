@@ -384,25 +384,25 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Get user profile
 app.get("/api/user-profile", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select(
-      "-username -profilePic -password -email"
-    );
+    const user = await User.findById(req.user.userId).select("-password");
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Format profile pic URL
+    // Construct profile picture URL properly
     const profilePicUrl = user.profilePic.startsWith("http")
       ? user.profilePic
       : `${req.protocol}://${req.get("host")}/uploads/${user.profilePic}`;
 
-    const userProfile = {
-      ...user.toObject(),
-      profilePicUrl,
-    };
-
-    res.json(userProfile);
+    res.json({
+      username: user.username,
+      email: user.email,
+      profilePic: profilePicUrl,
+      friends: user.friends,
+      friendRequests: user.friendRequests,
+      lastActive: user.lastActive,
+    });
   } catch (error) {
     console.error("Get profile error:", error);
     res.status(500).json({ error: "Server error" });
