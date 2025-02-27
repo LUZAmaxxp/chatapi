@@ -478,7 +478,7 @@ app.post(
       }
 
       // Delete old profile pic if it's not the default and exists in our uploads
-      if (user.profilePic && user.profilePic !== "default.png") {
+      if (user.profilePic) {
         const oldPicPath = path.join(uploadDir, user.profilePic);
         if (fs.existsSync(oldPicPath)) {
           fs.unlinkSync(oldPicPath); // Delete old profile picture
