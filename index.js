@@ -384,9 +384,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // Get user profile
 app.get("/api/user-profile", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select(
-      "-username -profilePic -password"
-    );
+    const user = await User.findById(req.user.userId).select("username");
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
