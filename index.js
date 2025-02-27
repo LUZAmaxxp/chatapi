@@ -382,7 +382,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 app.get("/api/user-profile", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select(
-      "-password -friendRequests"
+      "-username -profilePic -password"
     );
 
     if (!user) {
