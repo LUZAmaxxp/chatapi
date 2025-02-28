@@ -490,9 +490,7 @@ app.post(
       user.profilePic = req.file.filename;
       await user.save();
 
-      const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
-        req.file.filename
-      }`;
+      const imageUrl = `https://chatapi-wrob.onrender.com/uploads/${req.file.filename}`;
       console.log(imageUrl, "image uploaded successfully");
 
       res.json({
