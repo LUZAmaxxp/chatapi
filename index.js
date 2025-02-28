@@ -390,10 +390,12 @@ app.get("/api/user-profile", auth, async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Construct profile picture URL properly
+    // Construct profile picture URL
     const profilePicUrl = user.profilePic.startsWith("http")
       ? user.profilePic
       : `${req.protocol}://${req.get("host")}/uploads/${user.profilePic}`;
+
+    console.log("Profile Pic URL:", profilePicUrl); // Debugging
 
     res.json({
       username: user.username,
