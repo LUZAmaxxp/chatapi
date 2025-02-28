@@ -409,7 +409,6 @@ app.get("/api/user-profile", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
 // Update user profile
 app.put("/api/update-profile", auth, async (req, res) => {
   try {
