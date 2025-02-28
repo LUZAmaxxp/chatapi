@@ -397,7 +397,7 @@ app.get("/api/user-profile", auth, async (req, res) => {
     // Construct profile picture URL
     const profilePicUrl = user.profilePic.startsWith("http")
       ? user.profilePic
-      : `https://your-render-backend-url.onrender.com/uploads/${user.profilePic}`;
+      : `https://chatapi-wrob.onrender.com/uploads/${user.profilePic}`;
 
     console.log("Profile Pic URL:", profilePicUrl); // Debugging
 
