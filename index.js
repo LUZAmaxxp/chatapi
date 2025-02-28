@@ -395,11 +395,9 @@ app.get("/api/user-profile", auth, async (req, res) => {
     }
 
     // Construct profile picture URL
-    const profilePicUrl = user.profilePic.startsWith("https")
+    const profilePicUrl = user.profilePic.startsWith("http")
       ? user.profilePic
-      : `https://${req.protocol}://${req.get("host")}/uploads/${
-          user.profilePic
-        }`;
+      : `${req.protocol}://${req.get("host")}/uploads/${user.profilePic}`;
 
     console.log("Profile Pic URL:", profilePicUrl); // Debugging
 
