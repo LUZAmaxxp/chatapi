@@ -466,6 +466,49 @@ app.put("/api/update-profile", auth, async (req, res) => {
 
 // Upload profile picture
 // Upload profile picture
+app.post(
+  "/api/upload-profile-image",
+  auth,
+  upload.single("profileImage"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const user = await User.findById(req.user.userId);
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Delete old profile pic if it's not the default and exists in our uploads
+      if (user.profilePic) {
+        const oldPicPath = path.join(uploadDir, user.profilePic);
+        if (fs.existsSync(oldPicPath)) {
+          fs.unlinkSync(oldPicPath); // Delete old profile picture
+        }
+      }
+
+      // Save the new profile pic filename to the user document
+      user.profilePic = req.file.filename;
+      await user.save();
+
+      const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
+        req.file.filename
+      }`;
+      console.log(imageUrl, "image uploaded successfully");
+
+      res.json({
+        message: "Profile image uploaded successfully",
+        imageUrl,
+      });
+    } catch (error) {
+      console.error("Upload profile image error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
 
 io.use((socket, next) => {
   try {
