@@ -492,6 +492,7 @@ app.post(
       const imageUrl = `${req.protocol}://${req.get("host")}/uploads/${
         req.file.filename
       }`;
+      console.log(imageUrl, "image uploaded successfully");
 
       res.json({
         message: "Profile image uploaded successfully",
