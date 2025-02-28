@@ -26,7 +26,6 @@ const server = http.createServer(app);
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(express.json({ limit: "10kb" }));
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -35,12 +34,12 @@ const limiter = rateLimit({
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, "uploads");
-// Ensure upload directory exists
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Configure storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadDir);
