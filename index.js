@@ -461,8 +461,6 @@ app.put("/api/update-profile", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
-// Upload profile picture
 // Upload profile picture
 app.post(
   "/api/upload-profile-image",
