@@ -81,7 +81,6 @@ const corsOptions = {
   credentials: true,
   maxAge: 86400,
 };
-app.use(cors(corsOptions));
 
 const io = new Server(server, {
   cors: corsOptions,
@@ -398,9 +397,7 @@ app.get("/api/user-profile", auth, async (req, res) => {
     // Construct profile picture URL
     const profilePicUrl = user.profilePic.startsWith("http")
       ? user.profilePic
-      : `https://${req.protocol}://${req.get("host")}/uploads/${
-          user.profilePic
-        }`;
+      : `https://your-render-backend-url.onrender.com/uploads/${user.profilePic}`;
 
     console.log("Profile Pic URL:", profilePicUrl); // Debugging
 
@@ -451,9 +448,7 @@ app.put("/api/update-profile", auth, async (req, res) => {
 
     const profilePicUrl = updatedUser.profilePic.startsWith("http")
       ? updatedUser.profilePic
-      : `${req.protocol}://${req.get("host")}/uploads/${
-          updatedUser.profilePic
-        }`;
+      : `https://your-render-backend-url.onrender.com/uploads/${user.profilePic}`;
 
     const userProfile = {
       ...updatedUser.toObject(),
