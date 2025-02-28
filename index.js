@@ -448,7 +448,7 @@ app.put("/api/update-profile", auth, async (req, res) => {
 
     const profilePicUrl = updatedUser.profilePic.startsWith("http")
       ? updatedUser.profilePic
-      : `https://your-render-backend-url.onrender.com/uploads/${user.profilePic}`;
+      : `https://chatapi-wrob.onrender.com/uploads/${user.profilePic}`;
 
     const userProfile = {
       ...updatedUser.toObject(),
