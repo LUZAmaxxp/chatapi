@@ -26,6 +26,7 @@ const server = http.createServer(app);
 app.use(helmet());
 app.use(mongoSanitize());
 app.use(express.json({ limit: "10kb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -64,7 +65,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max size
+    fileSize: 5 * 1024 * 1024,
   },
 });
 app.use("/api/", limiter);
@@ -379,7 +380,6 @@ app.get("/api/messages/:friendId", auth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Get user profile
 app.get("/api/user-profile", auth, async (req, res) => {
