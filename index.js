@@ -75,6 +75,13 @@ app.use((req, res, next) => {
   next();
 });
 
+const corsOptions = {
+  origin: process.env.FRONTEND_URI,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+  maxAge: 86400,
+};
+
 const io = new Server(server, {
   cors: corsOptions,
   pingTimeout: 60000,
