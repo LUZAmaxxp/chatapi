@@ -3,18 +3,13 @@ import { Server } from "socket.io";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import cors from "cors";
 import dotenv from "dotenv";
 import http from "http";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
-import User from "./models/User.js";
-import Message from "./models/Message.js";
+import User from "./models/User/User.js";
+import Message from "./models/Message/Message.js";
 
 dotenv.config();
 
@@ -33,26 +28,6 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
 });
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const uploadDir = path.join(__dirname, "uploads");
-
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, file.fieldname + "-" + uniqueSuffix + ext);
-  },
-});
-
 app.use("/api/", limiter);
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
