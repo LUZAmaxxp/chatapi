@@ -397,7 +397,6 @@ app.get("/api/user-profile", auth, async (req, res) => {
     res.json({
       username: user.username,
       email: user.email,
-
       friends: user.friends,
       friendRequests: user.friendRequests,
       lastActive: user.lastActive,
