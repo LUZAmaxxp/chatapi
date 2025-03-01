@@ -9,3 +9,4 @@ const auth = async (req, res, next) => {
     res.status(401).json({ error: "Authentication required" });
   }
 };
+module.exports = auth;
