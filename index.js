@@ -5,12 +5,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import http from "http";
-import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
 import User from "./models/User/User.js";
 import Message from "./models/Message/Message.js";
 import auth from "./middleware/auth.js";
+import limiter from "./middleware/limiter.js";
 
 dotenv.config();
 
@@ -25,10 +25,6 @@ app.use(helmet());
 app.use(mongoSanitize());
 app.use(express.json({ limit: "10kb" }));
 
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-});
 app.use("/api/", limiter);
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
