@@ -13,6 +13,8 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import User from "./models/User.js";
+import Message from "./models/Message.js";
 
 dotenv.config();
 
@@ -51,22 +53,6 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image/")) {
-    cb(null, true);
-  } else {
-    cb(new Error("Not an image! Please upload only images."), false);
-  }
-};
-
-const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-});
 app.use("/api/", limiter);
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -95,76 +81,6 @@ mongoose
   )
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
-
-const UserSchema = new mongoose.Schema(
-  {
-    username: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      minlength: 3,
-      maxlength: 30,
-    },
-    email: {
-      type: String,
-      required: true,
-      unique: true,
-      lowercase: true,
-      trim: true,
-    },
-    password: {
-      type: String,
-      required: true,
-    },
-    profilePic: {
-      type: String,
-      default: "default.png",
-    },
-    friends: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-    friendRequests: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
-    lastActive: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { timestamps: true }
-);
-
-const MessageSchema = new mongoose.Schema(
-  {
-    sender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    receiver: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    text: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 2000,
-    },
-  },
-  { timestamps: true }
-);
-
-const User = mongoose.model("User", UserSchema);
-const Message = mongoose.model("Message", MessageSchema);
 
 const auth = async (req, res, next) => {
   try {
