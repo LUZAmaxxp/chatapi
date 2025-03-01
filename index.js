@@ -11,6 +11,7 @@ import User from "./models/User/User.js";
 import Message from "./models/Message/Message.js";
 import auth from "./middleware/auth.js";
 import limiter from "./middleware/limiter.js";
+import cors from "cors";
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ const corsOptions = {
   credentials: true,
   maxAge: 86400,
 };
+app.use(cors(corsOptions));
 
 const io = new Server(server, {
   cors: corsOptions,
