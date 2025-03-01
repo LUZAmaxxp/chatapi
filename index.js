@@ -10,6 +10,7 @@ import helmet from "helmet";
 import mongoSanitize from "express-mongo-sanitize";
 import User from "./models/User/User.js";
 import Message from "./models/Message/Message.js";
+import auth from "./middleware/auth.js";
 
 dotenv.config();
 
@@ -56,17 +57,6 @@ mongoose
   )
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
-
-const auth = async (req, res, next) => {
-  try {
-    const token = req.header("Authorization").replace("Bearer ", "");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: "Authentication required" });
-  }
-};
 
 app.post("/api/signup", async (req, res) => {
   try {
