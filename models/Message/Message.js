@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-const Message = mongoose.model("Message", MessageSchema);
+
+// Define the schema first
 const MessageSchema = new mongoose.Schema(
   {
     sender: {
@@ -21,3 +22,8 @@ const MessageSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Create the model after the schema is defined
+const Message = mongoose.model("Message", MessageSchema);
+
+export default Message;
