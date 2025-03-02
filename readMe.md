@@ -29,7 +29,7 @@ Ensure you have the following installed:
 ### Clone Repository
 
 ```sh
-git clone https://github.com/yourusername/chat-app.git
+git clone https://github.com/LUZAmaxxp/chat-app.git
 cd chat-app
 ```
 
