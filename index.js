@@ -51,7 +51,7 @@ const userSocketMap = new Map();
 
 mongoose
   .connect(
-    "mongodb+srv://allouchayman21:KU39Qaq9Bo8cnRgT@cluster0.uyowciu.mongodb.net/users?retryWrites=true&w=majority&appName=Cluster0"
+  process.env.MONGODB_URI
   )
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Connection Error:", err));
